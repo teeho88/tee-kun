@@ -1,0 +1,25 @@
+--cpu Cortex-M3
+"stm_esp_server\startup_stm32f103xe.o"
+"stm_esp_server\at_esp8266.o"
+"stm_esp_server\main.o"
+"stm_esp_server\stm32f1xx_it.o"
+"stm_esp_server\stm32f1xx_hal_msp.o"
+"stm_esp_server\stm32f1xx_hal_gpio_ex.o"
+"stm_esp_server\stm32f1xx_hal_tim.o"
+"stm_esp_server\stm32f1xx_hal_tim_ex.o"
+"stm_esp_server\stm32f1xx_hal_uart.o"
+"stm_esp_server\stm32f1xx_hal.o"
+"stm_esp_server\stm32f1xx_hal_rcc.o"
+"stm_esp_server\stm32f1xx_hal_rcc_ex.o"
+"stm_esp_server\stm32f1xx_hal_gpio.o"
+"stm_esp_server\stm32f1xx_hal_dma.o"
+"stm_esp_server\stm32f1xx_hal_cortex.o"
+"stm_esp_server\stm32f1xx_hal_pwr.o"
+"stm_esp_server\stm32f1xx_hal_flash.o"
+"stm_esp_server\stm32f1xx_hal_flash_ex.o"
+"stm_esp_server\stm32f1xx_hal_exti.o"
+"stm_esp_server\system_stm32f1xx.o"
+--library_type=microlib --strict --scatter "STM_ESP_Server\STM_ESP_Server.sct"
+--summary_stderr --info summarysizes --map --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "STM_ESP_Server.map" -o STM_ESP_Server\STM_ESP_Server.axf

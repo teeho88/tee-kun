@@ -160,22 +160,18 @@ void ESP_TransparentSend(char *data)
 
 void ESP_CloseTransparent(void)
 {
-	if(TransparentProtocol == UDP_TRANS)
+	char str[3] = "+++";
+	HAL_UART_Transmit(&MyUart,(uint8_t*)str, 3, 100);
+	HAL_Delay(50);
+	ESP_CloseConnect();
+	HAL_Delay(50);
+	while(!strstr(request,"CLOSED"))
 	{
-		char str[3] = "+++";
 		HAL_UART_Transmit(&MyUart,(uint8_t*)str, 3, 100);
 		HAL_Delay(50);
 		ESP_CloseConnect();
 		HAL_Delay(50);
-		while(!strstr(request,"CLOSED"))
-		{
-			HAL_UART_Transmit(&MyUart,(uint8_t*)str, 3, 100);
-			HAL_Delay(50);
-			ESP_CloseConnect();
-			HAL_Delay(50);
-		}
 	}
-	else ESP_CloseConnect();
 }
 
 void ESP_TCP_CreateTransparentMode(char *ip, uint16_t server_port)

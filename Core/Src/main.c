@@ -23,6 +23,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "AT_Esp8266.h"
+#include "tinhtoan.h"
+#include "TJ_MPU6050.h"
+#include "kalman.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,16 +37,30 @@ char *myssid = "ahaha";
 char *mypass = "tanho8888";
 char *serverIP = "192.168.1.100";
 uint16_t serverPort = 80;
+
+float T = 0; //s
+float Pitch = 0, Roll = 0, Head = 0; //-pi->pi
+float Vx = 0, Vy = 0;
+float X = 0, Y = 0;
+float ax = 0, ay = 0, az = 0; // m/s^2
+float wx = 0, wy = 0, wz = 0; // rad/s
+
+extern float accelScalingFactor, gyroScalingFactor;
+extern RawData_Def Accel;
+extern RawData_Def Gyro;
+
 //test
 int counttest = 0;
 char *ptest;
-char strtest[100] = {0};
+char strtest[50];
 int lentest = 0;
+int errtest = 0;
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -52,6 +69,8 @@ int lentest = 0;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef hdma_usart1_rx;
 
@@ -71,6 +90,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -87,7 +107,7 @@ static void MX_USART1_UART_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	
+	MPU_ConfigTypeDef myMpuConfig;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -110,7 +130,18 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART1_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
+	//1. Initialise the MPU6050 module and I2C
+  MPU6050_Init(&hi2c1);
+  //2. Configure Accel and Gyro parameters
+  myMpuConfig.Accel_Full_Scale = AFS_SEL_2g;
+  myMpuConfig.ClockSource = Internal_8MHz;
+  myMpuConfig.CONFIG_DLPF = DLPF_184A_188G_Hz;
+  myMpuConfig.Gyro_Full_Scale = FS_SEL_500;
+  myMpuConfig.Sleep_Mode_Bit = 0;  //1: sleep mode, 0: normal mode
+  MPU6050_Config(&myMpuConfig);
+	//3. Set communication to server
   HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t*)request, BUFFER_SIZE);
 	__HAL_UART_DISABLE_IT(&huart1,DMA_IT_HT);
 
@@ -125,24 +156,66 @@ int main(void)
 		}
 		state = ESP_CheckWifiConnect();
 	}
-	ESP_UDP_CreateTransparentMode(serverIP, serverPort);
+	ESP_TCP_CreateTransparentMode(serverIP, serverPort);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	int i = 0;
-	int k = -1;
+	int32_t at[3] = {0};
+	uint8_t count = 0;
+	float z[3] = {0};
+	uint32_t t_last = HAL_GetTick();
+	for(int i = 0; i < 10; i++)
+	{
+		if(ReadI2C_MPU(&myMpuConfig) == HAL_OK)
+		{
+			at[0] += Accel.x;
+			at[1] += Accel.y;
+			at[2] += Accel.z;
+			count++;
+		}
+	}
+	z[0] = at[0]*accelScalingFactor/count; z[1] = at[1]*accelScalingFactor/count; z[2] = at[2]*accelScalingFactor/count;
+	Q_init(z[0],z[1],z[2]);
   while (1)
   {
-		if(strstr(request,"la tao dio"))
+		if(strstr(request,"ket thuc"))
 		{
-			sprintf(strtest,"%d,%d,%d,%d,%d,%d",k,k,k,k,k,k);
-			ESP_TransparentSend(strtest);
+			ESP_CloseTransparent();
+			memset(request,0,BUFFER_SIZE);
 		}
 		else
 		{
-			i++;
-			sprintf(strtest,"%d,%d,%d,%d,%d,%d",i,i,i,i,i,i);
+			int32_t at[3] = {0}, wt[3] = {0};
+			uint8_t count = 0;
+			float z[6] = {0};
+			uint32_t t_cur = HAL_GetTick();
+			T = (t_cur - t_last)*0.001f;
+			t_last = t_cur;
+			for(int i = 0; i < 3; i++)
+			{
+				if(ReadI2C_MPU(&myMpuConfig) == HAL_OK)
+				{
+					at[0] += Accel.x;
+					at[1] += Accel.y;
+					at[2] += Accel.z;
+					wt[0] += Gyro.x;
+					wt[1] += Gyro.y;
+					wt[2] += Gyro.z;
+					count++;
+				}
+			}
+			if(!count) continue;
+			// kalman filter
+			z[0] = at[0]*accelScalingFactor/count; z[1] = at[1]*accelScalingFactor/count; z[2] = at[2]*accelScalingFactor/count;
+			z[3] = wt[0]*gyroScalingFactor/count; z[4] = wt[1]*gyroScalingFactor/count; z[5] = wt[2]*gyroScalingFactor/count;
+			float *x = KalmanFilter(z);
+			ax = *x; ay = *(x+1); az = *(x+2); wx = *(x+3); wy = *(x+4); wz= *(x+5);
+			updateQ();
+			goc_Euler_Quat();
+			updateV_Quat();
+			X += Vx*T; Y += Vy*T;
+			sprintf(strtest,"%.1f,%.1f,%.1f,%.1f,%.1f",X,Y,Pitch*180/3.14,Roll*180/3.14,Head*180/3.14);
 			ESP_TransparentSend(strtest);
 		}
 		counttest++;
@@ -186,6 +259,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 400000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
@@ -248,6 +355,7 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
 }
 

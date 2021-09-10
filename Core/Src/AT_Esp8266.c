@@ -49,13 +49,12 @@ void ESP_WifiConnect(char *ssid, char *pass)
 {
 	char cmd[100] = {0};
 	sprintf(cmd,"AT+CWJAP=\"%s\",\"%s\"",ssid,pass);
-	memset(request,0,BUFFER_SIZE);
 	while(1)
 	{
 	  ESP_SendCommand(cmd);
 		for(int i = 0; i<100; i++)
 		HAL_Delay(10);
-		if(strstr(request,"OK")) break;
+		if(strstr(request,"WIFI CONNECTED")) break;
 	}
 }
 
@@ -69,11 +68,10 @@ void ESP_SoftAPCreate(char *ssid, char *pass)
 
 HAL_StatusTypeDef ESP_CheckWifiConnect(void)
 {
-	memset(request,0,BUFFER_SIZE);
 	ESP_SendCommand("AT+CWJAP?");
 	for(int i = 0; i<100; i++)
 	HAL_Delay(10);
-	if(strstr(request,"OK")) return HAL_OK;
+	if(strstr(request,"+CWJAP:")) return HAL_OK;
 	else if(strstr(request,"No AP"))
 	{
 		ESP_SendCommand("AT+CWJAP?");
@@ -107,7 +105,7 @@ void ESP_SendData(char *data)
 	char str[100] = {0};
 	sprintf(str,"AT+CIPSEND=%d,%d",clientID,len);
 	ESP_SendCommand(str);
-	HAL_Delay(5);
+	HAL_Delay(3);
 	ESP_SendCommand(data);
 }
 
@@ -129,6 +127,7 @@ void ESP_CloseConnect(void)
 
 void ESP_UDP_CreateTransparentMode(char *ip, uint16_t server_port)
 {
+	memset(request,0,BUFFER_SIZE);
 	ESP_SendCommand("AT+CIPMUX=0");
 	transMode = SINGLE_CON;
 	HAL_Delay(50);
@@ -160,12 +159,9 @@ void ESP_TransparentSend(char *data)
 
 void ESP_CloseTransparent(void)
 {
+	memset(request,0,BUFFER_SIZE);
 	char str[3] = "+++";
-	HAL_UART_Transmit(&MyUart,(uint8_t*)str, 3, 100);
-	HAL_Delay(50);
-	ESP_CloseConnect();
-	HAL_Delay(50);
-	while(!strstr(request,"CLOSED"))
+	for(int i = 0; i<3; i++)
 	{
 		HAL_UART_Transmit(&MyUart,(uint8_t*)str, 3, 100);
 		HAL_Delay(50);
@@ -176,6 +172,7 @@ void ESP_CloseTransparent(void)
 
 void ESP_TCP_CreateTransparentMode(char *ip, uint16_t server_port)
 {
+	memset(request,0,BUFFER_SIZE);
 	ESP_SendCommand("AT+CIPMUX=0");
 	transMode = SINGLE_CON;
 	HAL_Delay(50);

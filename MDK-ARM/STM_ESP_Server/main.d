@@ -24,8 +24,14 @@ stm_esp_server\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_dma_ex.
 stm_esp_server\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_cortex.h
 stm_esp_server\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h
 stm_esp_server\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h
+stm_esp_server\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_i2c.h
 stm_esp_server\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 stm_esp_server\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
 stm_esp_server\main.o: D:\Program Files\keil u5\ARM\ARMCC\bin\..\include\stdio.h
 stm_esp_server\main.o: D:\Program Files\keil u5\ARM\ARMCC\bin\..\include\string.h
 stm_esp_server\main.o: ../Core/Inc/AT_Esp8266.h
+stm_esp_server\main.o: ../Core/Inc/tinhtoan.h
+stm_esp_server\main.o: D:\Program Files\keil u5\ARM\ARMCC\bin\..\include\stdbool.h
+stm_esp_server\main.o: D:\Program Files\keil u5\ARM\ARMCC\bin\..\include\math.h
+stm_esp_server\main.o: ../Core/Inc/TJ_MPU6050.h
+stm_esp_server\main.o: ../Core/Src/kalman.h

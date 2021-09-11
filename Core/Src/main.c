@@ -31,6 +31,7 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 char request[BUFFER_SIZE] = {0};
+char TXDATA[100];
 uint8_t clientID = 0;
 uint8_t numClient = 0;
 char *myssid = "ahaha";
@@ -50,11 +51,10 @@ extern RawData_Def Accel;
 extern RawData_Def Gyro;
 
 //test
-int counttest = 0;
+uint32_t countTest = 0;
 char *ptest;
-char strtest[50];
-int lentest = 0;
-int errtest = 0;
+uint16_t lentest = 0;
+uint16_t errtest = 0;
 
 /* USER CODE END PTD */
 
@@ -214,11 +214,14 @@ int main(void)
 			updateQ();
 			goc_Euler_Quat();
 			updateV_Quat();
-			X += Vx*T; Y += Vy*T;
-			sprintf(strtest,"%.1f,%.1f,%.1f,%.1f,%.1f",X,Y,Pitch*180/3.14,Roll*180/3.14,Head*180/3.14);
-			ESP_TransparentSend(strtest);
+			X += Vx*T; Y += Vy*T; Pitch = Pitch*180/3.14; Roll = Roll*180/3.14; Head = Head*180/3.14;
+			if(countTest%3==0)
+			{
+				sprintf(TXDATA,"%.1f,%.1f,%.1f,%.1f,%.1f\r\n",X,Y,Pitch,Roll,Head);
+				ESP_TransparentSend(TXDATA);
+			}
+			countTest++;
 		}
-		counttest++;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

@@ -30,7 +30,7 @@ RawData_Def Accel;
 RawData_Def Gyro;
 int16_t accel_reg_bias[3];
 int16_t Gyr_reg_bias[3];
-extern int errtest;
+extern uint32_t errtest;
 //Fucntion Definitions
 //1- i2c Handler 
 void MPU6050_Init(I2C_HandleTypeDef *I2Chnd)

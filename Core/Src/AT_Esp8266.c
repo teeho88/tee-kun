@@ -13,7 +13,7 @@ void ESP_SendCommand(char *cmd)
 
 void ESP_SetIP(uint8_t mode, char *ip)
 {
-	char cmd[100] = {0};
+	char cmd[50] = {0};
 	if(mode == STA)
 	{
 		sprintf(cmd,"AT+CIPSTA=\"%s\"",ip);
@@ -29,7 +29,8 @@ void ESP_SetIP(uint8_t mode, char *ip)
 void ESP_Init(UART_HandleTypeDef *huart, uint8_t mode)
 {
 	memcpy(&MyUart,huart,sizeof(*huart));
-	char cmd[100] = {0};
+	ESP_CloseTransparent();  // close transparent if it is running 
+	char cmd[50] = {0};
 	sprintf(cmd,"AT+CWMODE=%d",mode);
 	ESP_SendCommand(cmd);
 	HAL_Delay(50);
@@ -49,13 +50,11 @@ void ESP_WifiConnect(char *ssid, char *pass)
 {
 	char cmd[100] = {0};
 	sprintf(cmd,"AT+CWJAP=\"%s\",\"%s\"",ssid,pass);
-	memset(request,0,BUFFER_SIZE);
 	while(1)
 	{
 	  ESP_SendCommand(cmd);
-		for(int i = 0; i<100; i++)
-		HAL_Delay(10);
-		if(strstr(request,"OK")) break;
+		HAL_Delay(500);
+		if(strstr(request,"WIFI CONNECTED")) break;
 	}
 }
 
@@ -69,16 +68,13 @@ void ESP_SoftAPCreate(char *ssid, char *pass)
 
 HAL_StatusTypeDef ESP_CheckWifiConnect(void)
 {
-	memset(request,0,BUFFER_SIZE);
 	ESP_SendCommand("AT+CWJAP?");
-	for(int i = 0; i<100; i++)
-	HAL_Delay(10);
-	if(strstr(request,"OK")) return HAL_OK;
+	HAL_Delay(1000);
+	if(strstr(request,"+CWJAP:")) return HAL_OK;
 	else if(strstr(request,"No AP"))
 	{
 		ESP_SendCommand("AT+CWJAP?");
-		for(int i = 0; i<400; i++)
-		HAL_Delay(10);
+		HAL_Delay(1000);
 		if(strstr(request,"No AP")) return HAL_ERROR;
 	}
 	return HAL_BUSY;
@@ -89,14 +85,14 @@ void ESP_TCP_CreateServer(void)
 	ESP_SendCommand("AT+CIPMUX=1");
 	transMode = MULTI_CON;
 	HAL_Delay(50);
-	char str[100] = {0};
-	sprintf(str,"AT+CIPSERVER=1,%d",PORT);
+	char cmd[50] = {0};
+	sprintf(cmd,"AT+CIPSERVER=1,%d",PORT);
 	memset(request,0,BUFFER_SIZE);
-	ESP_SendCommand(str);
+	ESP_SendCommand(cmd);
 	HAL_Delay(50);
 	while(!strstr(request,"OK"))
 	{
-		ESP_SendCommand(str);
+		ESP_SendCommand(cmd);
 		HAL_Delay(50);
 	}
 }
@@ -104,11 +100,12 @@ void ESP_TCP_CreateServer(void)
 void ESP_SendData(char *data)
 {
 	int len = strlen(data);
-	char str[100] = {0};
-	sprintf(str,"AT+CIPSEND=%d,%d",clientID,len);
-	ESP_SendCommand(str);
-	HAL_Delay(5);
-	ESP_SendCommand(data);
+	char cmd[50] = {0};
+	if(transMode == MULTI_CON) sprintf(cmd,"AT+CIPSEND=%d,%d",clientID,len);
+	else sprintf(cmd,"AT+CIPSEND=%d",len);
+	ESP_SendCommand(cmd);
+	HAL_Delay(3);
+	HAL_UART_Transmit(&MyUart,(uint8_t*)data, len, 100);
 }
 
 void ESP_CloseServer(void)
@@ -121,26 +118,27 @@ void ESP_CloseConnect(void)
 	if(transMode == SINGLE_CON) ESP_SendCommand("AT+CIPCLOSE");
 	else
 	{
-		char str[100] = {0};
-		sprintf(str,"AT+CIPCLOSE=%d",clientID);
-		ESP_SendCommand(str);
+		char cmd[50] = {0};
+		sprintf(cmd,"AT+CIPCLOSE=%d",clientID);
+		ESP_SendCommand(cmd);
 	}
 }
 
 void ESP_UDP_CreateTransparentMode(char *ip, uint16_t server_port)
 {
+	memset(request,0,BUFFER_SIZE);
 	ESP_SendCommand("AT+CIPMUX=0");
 	transMode = SINGLE_CON;
 	HAL_Delay(50);
 	ESP_SendCommand("AT+CIPMODE=1");
 	HAL_Delay(50);
-	char str[100] = {0};
-	sprintf(str,"AT+CIPSTART=\"UDP\",\"%s\",%d,%d,0",ip,server_port,PORT);
-	ESP_SendCommand(str);
+	char cmd[100] = {0};
+	sprintf(cmd,"AT+CIPSTART=\"UDP\",\"%s\",%d,%d,0",ip,server_port,PORT);
+	ESP_SendCommand(cmd);
 	HAL_Delay(50);
 	while(!strstr(request,"CONNECT"))
 	{
-		ESP_SendCommand(str);
+		ESP_SendCommand(cmd);
 		HAL_Delay(50);
 	}
 	ESP_SendCommand("AT+CIPSEND");
@@ -155,17 +153,14 @@ void ESP_UDP_CreateTransparentMode(char *ip, uint16_t server_port)
 
 void ESP_TransparentSend(char *data)
 {
-	ESP_SendCommand(data);
+	int len = strlen(data);
+	HAL_UART_Transmit(&MyUart,(uint8_t*)data, len, 100);
 }
 
 void ESP_CloseTransparent(void)
 {
 	char str[3] = "+++";
-	HAL_UART_Transmit(&MyUart,(uint8_t*)str, 3, 100);
-	HAL_Delay(50);
-	ESP_CloseConnect();
-	HAL_Delay(50);
-	while(!strstr(request,"CLOSED"))
+	for(int i = 0; i<3; i++)
 	{
 		HAL_UART_Transmit(&MyUart,(uint8_t*)str, 3, 100);
 		HAL_Delay(50);
@@ -176,18 +171,19 @@ void ESP_CloseTransparent(void)
 
 void ESP_TCP_CreateTransparentMode(char *ip, uint16_t server_port)
 {
+	memset(request,0,BUFFER_SIZE);
 	ESP_SendCommand("AT+CIPMUX=0");
 	transMode = SINGLE_CON;
 	HAL_Delay(50);
 	ESP_SendCommand("AT+CIPMODE=1");
 	HAL_Delay(50);
-	char str[100] = {0};
-	sprintf(str,"AT+CIPSTART=\"TCP\",\"%s\",%d",ip,server_port);
-	ESP_SendCommand(str);
+	char cmd[100] = {0};
+	sprintf(cmd,"AT+CIPSTART=\"TCP\",\"%s\",%d",ip,server_port);
+	ESP_SendCommand(cmd);
 	HAL_Delay(50);
 	while(!strstr(request,"CONNECT"))
 	{
-		ESP_SendCommand(str);
+		ESP_SendCommand(cmd);
 		HAL_Delay(50);
 	}
 	ESP_SendCommand("AT+CIPSEND");

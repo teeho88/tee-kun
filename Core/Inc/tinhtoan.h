@@ -7,6 +7,7 @@
 struct Quaternion {
 	float w, x, y, z;
 };
+
 extern float T ;
 extern float Pitch, Roll, Head;
 extern float ax, ay, az, wx, wy, wz;
@@ -22,6 +23,8 @@ void goc_Euler_Cosin(void);
 void updateQ(void);
 void updateV_Quat(void);
 void goc_Euler_Quat(void);
+void Madgwick(void);
+
 void setW(float newWx, float newWy, float newWz);
 void seta(float newax, float neway, float newaz);
 		

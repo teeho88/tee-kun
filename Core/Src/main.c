@@ -30,31 +30,34 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-char request[BUFFER_SIZE] = {0};
-char TXDATA[100];
-uint8_t clientID = 0;
-uint8_t numClient = 0;
+extern float beta, zeta;
+extern float accelScalingFactor, gyroScalingFactor;
+extern RawData_Def Accel;
+extern RawData_Def Gyro;
+extern float accel_reg_bias[3];
+extern float gyr_reg_bias[3];
+
+#define BUFFER_SIZE 100
+char request[BUFFER_SIZE];
+char txdata[100];
+char inCommand[5] = {0};
 char *myssid = "ahaha";
 char *mypass = "tanho8888";
 char *serverIP = "192.168.1.100";
 uint16_t serverPort = 80;
 
 float T = 0; //s
-float Pitch = 0, Roll = 0, Head = 0; //-pi->pi
-float Vx = 0, Vy = 0;
-float X = 0, Y = 0;
-float ax = 0, ay = 0, az = 0; // m/s^2
-float wx = 0, wy = 0, wz = 0; // rad/s
-
-extern float accelScalingFactor, gyroScalingFactor;
-extern RawData_Def Accel;
-extern RawData_Def Gyro;
+float Pitch = 0.0f, Roll = 0.0f, Head = 0.0f; //-pi->pi
+float Vx = 0.000f, Vy = 0.000f;
+float X = 0.0f, Y = 0.0f;
+float ax = 0.000f, ay = 0.000f, az = 0.000f; // m/s^2
+float wx = 0.000f, wy = 0.000f, wz = 0.000f; // rad/s
+char Mode = 'Q';
 
 //test
 uint32_t countTest = 0;
-char *ptest;
-uint16_t lentest = 0;
 uint16_t errtest = 0;
+extern struct Quaternion aN;
 
 /* USER CODE END PTD */
 
@@ -81,6 +84,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	{
 		HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t*)request, BUFFER_SIZE);
 		__HAL_UART_DISABLE_IT(&huart1,DMA_IT_HT);
+		memcpy(inCommand, request, sizeof(inCommand));
 	}
 }
 /* USER CODE END PV */
@@ -133,19 +137,20 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 	//1. Initialise the MPU6050 module and I2C
-  MPU6050_Init(&hi2c1);
+  MPU6050_Init(&hi2c1, &myMpuConfig);
   //2. Configure Accel and Gyro parameters
   myMpuConfig.Accel_Full_Scale = AFS_SEL_2g;
   myMpuConfig.ClockSource = Internal_8MHz;
   myMpuConfig.CONFIG_DLPF = DLPF_184A_188G_Hz;
   myMpuConfig.Gyro_Full_Scale = FS_SEL_500;
   myMpuConfig.Sleep_Mode_Bit = 0;  //1: sleep mode, 0: normal mode
-  MPU6050_Config(&myMpuConfig);
-	//3. Set communication to server
+  MPU6050_Config();
+	//3. Calibrate MPU6050
+	Soft_Offset();
+	//4. Set communication to server
   HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t*)request, BUFFER_SIZE);
 	__HAL_UART_DISABLE_IT(&huart1,DMA_IT_HT);
-
-	ESP_Init(&huart1,STA_AP);
+	ESP_Init(&huart1, STA_AP, (uint8_t*)request, BUFFER_SIZE);
 	HAL_StatusTypeDef state = ESP_CheckWifiConnect();
 	while(state != HAL_OK) 
   {
@@ -156,7 +161,9 @@ int main(void)
 		}
 		state = ESP_CheckWifiConnect();
 	}
+start:
 	ESP_TCP_CreateTransparentMode(serverIP, serverPort);
+	memset(inCommand,0,5);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -165,24 +172,43 @@ int main(void)
 	uint8_t count = 0;
 	float z[3] = {0};
 	uint32_t t_last = HAL_GetTick();
-	for(int i = 0; i < 10; i++)
+	while(1)
 	{
-		if(ReadI2C_MPU(&myMpuConfig) == HAL_OK)
+		for(int i = 0; i < 10; i++)
 		{
-			at[0] += Accel.x;
-			at[1] += Accel.y;
-			at[2] += Accel.z;
-			count++;
+			if(ReadI2C_MPU() == HAL_OK)
+			{
+				at[0] += Accel.x;
+				at[1] += Accel.y;
+				at[2] += Accel.z;
+				count++;
+			}
 		}
+		z[1] = at[0]*accelScalingFactor/count; z[0] = at[1]*accelScalingFactor/count; z[2] = at[2]*accelScalingFactor/count;
+		if(z[0] == 0 && z[1] == 0 && z[2] == 0) continue;
+		Q_init(z[0],z[1],z[2]);
+		break;
 	}
-	z[0] = at[0]*accelScalingFactor/count; z[1] = at[1]*accelScalingFactor/count; z[2] = at[2]*accelScalingFactor/count;
-	Q_init(z[0],z[1],z[2]);
+	float *x;
+	uint8_t n_tb = 1;
+	uint32_t initT = HAL_GetTick();
+	float PI = 3.14159f;
+	float GyroMeasError = PI * (60.0f / 180.0f);     // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
+	float GyroMeasDrift = PI * (0.0f / 180.0f);      // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
+	beta = sqrt(3.0f/4.0f) * GyroMeasError;  	 // compute beta
+	zeta = sqrt(3.0f/4.0f) * GyroMeasDrift;    // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
   while (1)
   {
-		if(strstr(request,"ket thuc"))
+		if(strstr(inCommand,"eee"))
 		{
 			ESP_CloseTransparent();
 			memset(request,0,BUFFER_SIZE);
+			goto start;
+		}
+		else if (strstr(inCommand,"cmd:"))
+		{
+			Mode = inCommand[4];
+			memset(inCommand,0,5);
 		}
 		else
 		{
@@ -192,9 +218,9 @@ int main(void)
 			uint32_t t_cur = HAL_GetTick();
 			T = (t_cur - t_last)*0.001f;
 			t_last = t_cur;
-			for(int i = 0; i < 3; i++)
+			for(int i = 0; i < n_tb; i++)
 			{
-				if(ReadI2C_MPU(&myMpuConfig) == HAL_OK)
+				if(ReadI2C_MPU() == HAL_OK)
 				{
 					at[0] += Accel.x;
 					at[1] += Accel.y;
@@ -205,20 +231,66 @@ int main(void)
 					count++;
 				}
 			}
-			if(!count) continue;
-			// kalman filter
-			z[0] = at[0]*accelScalingFactor/count; z[1] = at[1]*accelScalingFactor/count; z[2] = at[2]*accelScalingFactor/count;
-			z[3] = wt[0]*gyroScalingFactor/count; z[4] = wt[1]*gyroScalingFactor/count; z[5] = wt[2]*gyroScalingFactor/count;
-			float *x = KalmanFilter(z);
-			ax = *x; ay = *(x+1); az = *(x+2); wx = *(x+3); wy = *(x+4); wz= *(x+5);
-			updateQ();
-			goc_Euler_Quat();
-			updateV_Quat();
-			X += Vx*T; Y += Vy*T; Pitch = Pitch*180/3.14; Roll = Roll*180/3.14; Head = Head*180/3.14;
-			if(countTest%3==0)
+			if(count == 0) continue;
+			z[0] = (at[0]/count + accel_reg_bias[0])*accelScalingFactor; z[1] = (at[1]/count + accel_reg_bias[1])*accelScalingFactor;
+			z[2] = (at[2]/count + accel_reg_bias[2])*accelScalingFactor;
+			z[3] = (wt[0]/count + gyr_reg_bias[0])*gyroScalingFactor; z[4] = (wt[1]/count + gyr_reg_bias[1])*gyroScalingFactor;
+			z[5] = (wt[2]/count + gyr_reg_bias[2])*gyroScalingFactor;
+			switch(Mode)
 			{
-				sprintf(TXDATA,"%.1f,%.1f,%.1f,%.1f,%.1f\r\n",X,Y,Pitch,Roll,Head);
-				ESP_TransparentSend(TXDATA);
+				case 'Q': // quaternion
+					n_tb = 1;
+					if(t_cur - initT > 10000)
+					{
+						beta = 0.045;  // decrease filter gain after stabilized
+						zeta = 0.02; // increase bias drift gain after stabilized
+					}
+					// kalman filter
+					x = KalmanFilter(z);
+					ay = (*x); ax = (*(x+1)); az = -(*(x+2)); wy = (*(x+3)); wx = (*(x+4)); wz = -(*(x+5));
+//					updateQ();
+					Madgwick();
+					goc_Euler_Quat();
+					updateV_Quat();
+					X += Vx*T; Y += Vy*T; Pitch = -Pitch*180/3.14; Roll = Roll*180/3.14; Head = -Head*180/3.14;
+					if(countTest % 3 == 0)
+					{
+						sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f\r\n",X,Y,Pitch,Roll,Head);
+						ESP_TransparentSend(txdata);
+					}
+				break;
+				case 'C': // calibration
+					ax = *z; ay = *(z+1); az = *(z+2); wx = *(z+3); wy = *(z+4); wz = *(z+5);
+					if(countTest % 1 == 0)
+					{
+						sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n",ax,ay,az,wx,wy,wz);
+						ESP_TransparentSend(txdata);
+					}
+					if(countTest == 5000) 
+					{
+						sprintf(txdata,"Giu cam bien dung yen tren mat phang ngang\r\n");
+						ESP_TransparentSend(txdata);
+						HAL_Delay(10);
+						sprintf(txdata,"Bat dau hieu chinh\r\n");
+						ESP_TransparentSend(txdata);
+						CalibrateMPU6050();
+						n_tb = 10;
+						sprintf(txdata,"Hieu chinh ok\r\n");
+						ESP_TransparentSend(txdata);
+						HAL_Delay(10);
+					}
+				break;
+				case 'M': // mearsure
+					n_tb = 1;
+					x = KalmanFilter(z);
+					ay = (*x); ax = (*(x+1)); az = -(*(x+2)); wy = (*(x+3)); wx = (*(x+4)); wz = -(*(x+5));
+					if(countTest % 1 == 0)
+					{
+						sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n",ax,ay,az,wx,wy,wz);
+						ESP_TransparentSend(txdata);
+					}
+				break;
+				default: break;
 			}
 			countTest++;
 		}

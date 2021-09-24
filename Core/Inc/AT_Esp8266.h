@@ -3,9 +3,6 @@
 
 #include "main.h"
 
-extern char request[BUFFER_SIZE];
-extern uint8_t clientID;
-
 static UART_HandleTypeDef MyUart;
 
 enum WIFI_MODE{
@@ -30,7 +27,7 @@ enum TRANSPARENT_PROTOCOL{
 #define PASS "BAKABAKA"
 
 void ESP_SendCommand(char* cmd);
-void ESP_Init(UART_HandleTypeDef *huart, uint8_t mode);
+void ESP_Init(UART_HandleTypeDef *huart, uint8_t mode, uint8_t *inBuff, uint16_t len);
 void ESP_SetIP(uint8_t mode, char *ip);
 void ESP_WifiConnect(char *ssid, char *pass);
 void ESP_SoftAPCreate(char *ssid, char *pass);

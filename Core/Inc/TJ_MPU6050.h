@@ -45,6 +45,8 @@ References:
 #define FIFO_COUNTH_REG 	0x72
 #define FIFO_R_W_REG 			0x74
 
+#define startAddressFlash 0x08000000+2048*127
+
 //TypeDefs and Enums
 //1- MPU Configuration 
 typedef struct
@@ -123,16 +125,15 @@ typedef struct
 	float z;
 }ScaledData_Def;
 
-
 //Function Prototype
 //1- i2c Handler 
-void MPU6050_Init(I2C_HandleTypeDef *I2Chnd);
+void MPU6050_Init(I2C_HandleTypeDef *I2Chnd, MPU_ConfigTypeDef *mpuCon);
 //2- i2c Read
 HAL_StatusTypeDef I2C_Read(uint8_t ADDR, uint8_t *i2cBuf, uint8_t NofData);
 //3- i2c Write 8 Bit
 HAL_StatusTypeDef I2C_Write8(uint8_t ADDR, uint8_t data);
 //4- MPU6050 Initialaztion Configuration 
-void MPU6050_Config(MPU_ConfigTypeDef *config);
+void MPU6050_Config(void);
 //5- Get Sample Rate Divider
 uint8_t MPU6050_Get_SMPRT_DIV(void);
 //6- Set Sample Rate Divider
@@ -142,8 +143,13 @@ uint8_t MPU6050_Get_FSYNC(void);
 //8- Set External Frame Sync.
 void MPU6050_Set_FSYNC(enum EXT_SYNC_SET_ENUM ext_Sync);
 //9- Get Accel Raw Data
-HAL_StatusTypeDef ReadI2C_MPU(MPU_ConfigTypeDef *MpuConfig);
-//10- Calibrate MPU6050
-HAL_StatusTypeDef CalibrateMPU6050(MPU_ConfigTypeDef *MpuConfig);
+HAL_StatusTypeDef ReadI2C_MPU(void);
+//10 - Set offset
+HAL_StatusTypeDef SetOffset(float accelOffset[3], float gyroOffset[3]);
+//11- Calibrate MPU6050
+HAL_StatusTypeDef CalibrateMPU6050(void);
+//12 - Set offset Soft
+void Soft_SetOffset(float accelOffset[3], float gyroOffset[3]);
+void Soft_Offset(void);
 
 #endif

@@ -24,6 +24,6 @@
 "stm_esp_server\stm32f1xx_hal_uart.o"
 "stm_esp_server\system_stm32f1xx.o"
 --library_type=microlib --strict --scatter "STM_ESP_Server\STM_ESP_Server.sct"
---summary_stderr --info summarysizes --map --xref --callgraph --symbols
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers
 --list "STM_ESP_Server.map" -o STM_ESP_Server\STM_ESP_Server.axf

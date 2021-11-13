@@ -1,19 +1,19 @@
 #include <tinhtoan.h>
 #include <stdlib.h>
+#include <string.h>
 
-/* Cac truc X -> Pitch / ax 
-            Y -> Roll / ay (huong mui)
-						Z -> Head / az
+/* Cac truc X -> Pitch / ax (huong mui)
+            Y -> Roll / ay
+			Z -> Yaw / az
 */
-struct Quaternion q;
+struct Quaternion q, q_old;
 static float C[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
 struct Quaternion aN;
 // for madgwick
-float beta;
-float zeta;
-float gbiasx = 0, gbiasy = 0, gbiasz = 0;  			// gyro bias error
+float gbiasx = 0, gbiasy = 0, gbiasz = 0;	// gyro bias error
 
-void C_init(float a1, float a2, float a3){
+void C_init(float ab[3]){
+	float a1 = ab[0]; float a2 = ab[1]; float a3 = ab[2];
 	// Normalise accelerometer measurement
 	float norm = sqrt(a1 * a1 + a2 * a2 + a3 * a3);
 	if (norm == 0.0f) return; // handle NaN
@@ -21,10 +21,10 @@ void C_init(float a1, float a2, float a3){
 	a2 = a1 / norm;
 	Roll = asin(a2);
 	Pitch = asin(-a1/cos(Roll));
-	Head = 0;
+	Yaw = 0;
 	// CbN
 	C[0][0] = 1;
-  C[0][1] = 0;
+	C[0][1] = 0;
 	C[0][2] = Roll;
 	C[1][0] = Pitch*Roll;
 	C[1][1] = 1;
@@ -58,23 +58,21 @@ void goc_Euler_Cosin(void) {
 	 float C0 = sqrtf(powf(C[2][0],2)+powf(C[2][2],2));
 	 Pitch = atanf(C[2][1]/C0);
 	 Roll = - atanf(C[2][0]/C[2][2]);
-	 Head = atanf(C[0][1]/C[1][1]);
+	 Yaw = atanf(C[0][1]/C[1][1]);
 }
 
 void updateV_Cosin(void) {
-		/* V in Navigation */
+	/* V in Navigation */
 	float g = 9.8;
-		Vx += T*(C[0][0]*ax + C[0][1]*ay + C[0][2]*az)*g;
-		Vy += T*(C[1][0]*ax + C[1][1]*ay + C[1][2]*az)*g;
+	Vx += T*(C[0][0]*ax + C[0][1]*ay + C[0][2]*az)*g;
+	Vy += T*(C[1][0]*ax + C[1][1]*ay + C[1][2]*az)*g;
 }
 
-void Q_init(float a1, float a2, float a3){
-	// for madgwick
-	float PI = 3.14159f;
-	float GyroMeasError = PI * (60.0f / 180.0f);     // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
-	float GyroMeasDrift = PI * (0.0f / 180.0f);      // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
+void Q_init(float ab[3], float GyroMeasError, float GyroMeasDrift){
 	beta = sqrt(3.0f/4.0f) * GyroMeasError;  	 // compute beta
 	zeta = sqrt(3.0f/4.0f) * GyroMeasDrift;    // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
+	gbiasx = 0; gbiasy = 0; gbiasz = 0;
+	float a1 = ab[0]; float a2 = ab[1]; float a3 = ab[2];
 	// Normalise accelerometer measurement
 	float norm = sqrt(a1 * a1 + a2 * a2 + a3 * a3);
 	if (norm == 0) return; // handle NaN
@@ -82,11 +80,11 @@ void Q_init(float a1, float a2, float a3){
 	a2 = a2/norm;
 	Roll = asin(a2);
 	Pitch = asin(-a1/cos(Roll));
-	Head = 0;
+	Yaw = 0;
 	
 	// Abbreviations for the various angular functions
-  float cy = cos(Head * 0.5);
-	float sy = sin(Head * 0.5);
+	float cy = cos(Yaw * 0.5);
+	float sy = sin(Yaw * 0.5);
 	float cp = cos(Pitch * 0.5);
 	float sp = sin(Pitch * 0.5);
 	float cr = cos(Roll * 0.5);
@@ -114,7 +112,7 @@ void updateQ(void){
 }
 
 void goc_Euler_Quat(void){
-	  Head   = atan2(2.0f * (q.x * q.y + q.w * q.z),1 - 2.0f * (q.y * q.y + q.z * q.z));   
+	Yaw   = atan2(2.0f * (q.x * q.y + q.w * q.z),1 - 2.0f * (q.y * q.y + q.z * q.z));
     Pitch = asin(2.0f * (q.w * q.y - q.x * q.z));
     Roll  = atan2(2.0f * (q.w * q.x + q.y * q.z), 1 - 2.0f * (q.x * q.x + q.y * q.y));
 }
@@ -171,9 +169,9 @@ void Madgwick(void)
 	// Normalise accelerometer measurement
 	norm = sqrt(ax * ax + ay * ay + az * az);
 	if (norm == 0) return; // handle NaN
-	a1 = -ax/norm;
-	a2 = -ay/norm;
-	a3 = -az/norm;
+	a1 = ax/norm;
+	a2 = ay/norm;
+	a3 = az/norm;
 	
 	// Compute the objective function and Jacobian
 	f1 = _2q2 * q4 - _2q1 * q3 - a1;
@@ -229,7 +227,7 @@ void Madgwick(void)
 	q.w = q1 / norm;
 	q.x = q2 / norm;
 	q.y = q3 / norm;
-	q.z = q4 / norm;	
+	q.z = q4 / norm;
 }
         
 void setW(float newWx, float newWy, float newWz) { wx = newWx; wy = newWy; wz = newWz; }

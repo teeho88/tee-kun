@@ -544,12 +544,14 @@ ARM Macro Assembler    Page 9
   354 0000001C                 END
               00000000 
               00000000 
-Command Line: --debug --xref --cpu=Cortex-M3 --apcs=interwork --depend=stm_esp_
-server\startup_stm32f103xe.d -ostm_esp_server\startup_stm32f103xe.o -ID:\TAILIE
-U\MyProject\Project_inear_nav\STM32_ESP8266\STM_ESP_Server\MDK-ARM\RTE -I"D:\Pr
-ogram Files\keil u5\ARM\PACK\ARM\CMSIS\3.20.4\CMSIS\Include" -I"D:\Program File
-s\keil u5\ARM\PACK\Keil\STM32F1xx_DFP\1.0.5\Device\Include" --predefine="__MICR
-OLIB SETA 1" --list=startup_stm32f103xe.lst startup_stm32f103xe.s
+Command Line: --debug --xref --diag_suppress=9931 --cpu=Cortex-M3 --apcs=interw
+ork --depend=stm_esp_server\startup_stm32f103xe.d -ostm_esp_server\startup_stm3
+2f103xe.o -I.\RTE\_STM_ESP_Server -I"D:\Program Files\keil u5\ARM\PACK\ARM\CMSI
+S\5.7.0\CMSIS\Core\Include" -I"D:\Program Files\keil u5\ARM\PACK\Keil\STM32F1xx
+_DFP\2.3.0\Device\Include" --predefine="__MICROLIB SETA 1" --predefine="__UVISI
+ON_VERSION SETA 532" --predefine="_RTE_ SETA 1" --predefine="STM32F10X_HD SETA 
+1" --predefine="_RTE_ SETA 1" --list=startup_stm32f103xe.lst startup_stm32f103x
+e.s
 
 
 
@@ -1421,4 +1423,4 @@ Symbol: __main
       At line 151 in file startup_stm32f103xe.s
 Comment: __main used once
 2 symbols
-420 symbols in table
+423 symbols in table

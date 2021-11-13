@@ -15,8 +15,8 @@ extern float Vx, Vy, Vz;
 
 struct Quaternion NhanQuat( struct Quaternion q1, struct Quaternion q2);
 struct Quaternion LienhopQuat( struct Quaternion q);
-void C_init(float a1, float a2, float a3);
-void Q_init(float a1, float a2, float a3);
+void C_init(float ab[3]);
+void Q_init(float ab[3], float GyroMeasError, float GyroMeasDrift);
 void updateC(void);
 void updateV_Cosin(void);
 void goc_Euler_Cosin(void);

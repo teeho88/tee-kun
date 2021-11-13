@@ -171,6 +171,11 @@ start:
 	int32_t at[3] = {0};
 	uint8_t count = 0;
 	float z[3] = {0};
+	float PI = 3.14159f;
+	float GyroMeasError = PI * (60.0f / 180.0f);     // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
+	float GyroMeasDrift = PI * (0.0f / 180.0f);      // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
+	beta = sqrt(3.0f/4.0f) * GyroMeasError;  	 // compute beta
+	zeta = sqrt(3.0f/4.0f) * GyroMeasDrift;    // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 	uint32_t t_last = HAL_GetTick();
 	while(1)
 	{
@@ -186,17 +191,13 @@ start:
 		}
 		z[1] = at[0]*accelScalingFactor/count; z[0] = at[1]*accelScalingFactor/count; z[2] = at[2]*accelScalingFactor/count;
 		if(z[0] == 0 && z[1] == 0 && z[2] == 0) continue;
-		Q_init(z[0],z[1],z[2]);
+		Q_init(z, GyroMeasError, GyroMeasDrift);
 		break;
 	}
 	float *x;
 	uint8_t n_tb = 1;
+	uint8_t n_calib = 0;
 	uint32_t initT = HAL_GetTick();
-	float PI = 3.14159f;
-	float GyroMeasError = PI * (60.0f / 180.0f);     // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
-	float GyroMeasDrift = PI * (0.0f / 180.0f);      // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
-	beta = sqrt(3.0f/4.0f) * GyroMeasError;  	 // compute beta
-	zeta = sqrt(3.0f/4.0f) * GyroMeasDrift;    // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
   while (1)
   {
 		if(strstr(inCommand,"eee"))
@@ -245,28 +246,31 @@ start:
 						beta = 0.045;  // decrease filter gain after stabilized
 						zeta = 0.02; // increase bias drift gain after stabilized
 					}
-					// kalman filter
+					// Kalman filter
 					x = KalmanFilter(z);
 					ay = (*x); ax = (*(x+1)); az = -(*(x+2)); wy = (*(x+3)); wx = (*(x+4)); wz = -(*(x+5));
-//					updateQ();
+					//updateQ();
+					ay = 0.1; ax = -0.2; az = -0.8; wy = 0.01; wx = -0.01; wz = 0.02;
 					Madgwick();
 					goc_Euler_Quat();
 					updateV_Quat();
 					X += Vx*T; Y += Vy*T; Pitch = -Pitch*180/3.14; Roll = Roll*180/3.14; Head = -Head*180/3.14;
+					X += 0.1; Y += 0.1; Pitch += 0.1; Roll += 0.1; Head += 0.1;
+					HAL_Delay(50);
 					if(countTest % 3 == 0)
 					{
+						HAL_Delay(10);
 						sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f\r\n",X,Y,Pitch,Roll,Head);
 						ESP_TransparentSend(txdata);
 					}
 				break;
 				case 'C': // calibration
 					ax = *z; ay = *(z+1); az = *(z+2); wx = *(z+3); wy = *(z+4); wz = *(z+5);
-					if(countTest % 1 == 0)
-					{
-						sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n",ax,ay,az,wx,wy,wz);
-						ESP_TransparentSend(txdata);
-					}
-					if(countTest == 5000) 
+					HAL_Delay(10);
+					sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n",ax,ay,az,wx,wy,wz);
+					ESP_TransparentSend(txdata);
+					if(countTest % 50 == 0) n_calib ++;
+					if(n_calib == 5)					
 					{
 						sprintf(txdata,"Giu cam bien dung yen tren mat phang ngang\r\n");
 						ESP_TransparentSend(txdata);
@@ -274,7 +278,8 @@ start:
 						sprintf(txdata,"Bat dau hieu chinh\r\n");
 						ESP_TransparentSend(txdata);
 						CalibrateMPU6050();
-						n_tb = 10;
+						n_calib = 0;
+						Mode = 'M';
 						sprintf(txdata,"Hieu chinh ok\r\n");
 						ESP_TransparentSend(txdata);
 						HAL_Delay(10);
@@ -284,11 +289,9 @@ start:
 					n_tb = 1;
 					x = KalmanFilter(z);
 					ay = (*x); ax = (*(x+1)); az = -(*(x+2)); wy = (*(x+3)); wx = (*(x+4)); wz = -(*(x+5));
-					if(countTest % 1 == 0)
-					{
-						sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n",ax,ay,az,wx,wy,wz);
-						ESP_TransparentSend(txdata);
-					}
+					HAL_Delay(10);
+					sprintf(txdata,"!%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n",ax,ay,az,wx,wy,wz);
+					ESP_TransparentSend(txdata);
 				break;
 				default: break;
 			}
